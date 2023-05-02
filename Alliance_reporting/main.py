@@ -6,6 +6,10 @@ import random
 import win32api, win32con
 import pygetwindow
 from datetime import datetime
+import cv2 
+import easyocr
+import pyscreenshot as ImageGrab
+import numpy as np
 
 
 def click(x,y):
@@ -45,24 +49,9 @@ def onMap():
         return False
 #STATIC PARAMS
 
-GOLD = "search_GOLD.png"
-MANA = "search_MANA.png"
-IRON = "search_IRON.png"
-WOOD = "search_WOOD.png"
-DARKLINGS = "search_darklings.png"
-GATHER = "gather.png"
-CREATE_LEGIONS = "create_legions.png"
-MARCH = "march.png"
-
+ranking_type = "HELP"
 # Parameters Definition 
 
-MAX_LEGIONS = 5 # The maximum number of legions you have. (Can't yet be a subset of you maximum legions.)
-DESIRED_RESOURCE = IRON # The resource you want to collect. Can be one of: ("MANA", "GOLD", "WOOD", "IRON")
-
-FULL = "FULL_"+str(MAX_LEGIONS)+".png"
-
-EXPONENTIAL_BACKOFF = 1
-#Find the window
 try:
     window = pygetwindow.getWindowsWithTitle("Call of Dragons")[0]
     window.activate()
@@ -80,68 +69,80 @@ right,bottom = window.bottomright
 if not onMap():
     keyboard_press("space") #once into city, go into space mode by pressing space
 
-keyboard_press("f") #Into space mode, press F, not to pay respect but to enter search mode.
+keyboard_press("o") #Into space mode, press O To enter Alliance menu
 
 
-while keyboard.is_pressed('q') == False: #the main loop (press q to pause the bot)
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
-    keyboard_press("f")
-    search_darklings = detectElement(DARKLINGS)
-    if(search_darklings != False):
-        time.sleep(0.21)
-        print(current_time," Darklings search icon is not selected, selecting it.")
-        click(search_darklings.left, search_darklings.top)
-    else:
-        print(current_time," Darklings search icon is selected, proceed...")
-        print(current_time," User has selected resource: "+DESIRED_RESOURCE)
-        resource_search = detectElement(DESIRED_RESOURCE)
+print("Loading Model")
+reader = easyocr.Reader(['ch_sim','en'], gpu = True)
+file = open("reporting.txt","w") 
 
-        if resource_search != False: 
-            print(current_time," Desired resource found")
-            click(resource_search.left, resource_search.top)
-        else:
-            print(current_time," can't find desired resource")
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+keyboard_press("o")
+alliance_params_button = detectElement("alliance_params.png")
+if(alliance_params_button != False):
+    time.sleep(0.21)
+    print(current_time," Members icon found")
+    click(alliance_params_button.left+60, alliance_params_button.top+20)
+else:
+    print(current_time," Members icon not found")
 
-        search_button = detectElement("search_button.png")
-        if search_button != False:
-            print(current_time," Search Button found")
-            click(search_button.left+20, search_button.top+15)
-        else:
-            print(current_time," no search button found.")
-        marker = detectElement("marker.png")
-        time.sleep(2)
-        click(int(midx),int(midy))
+ranking_button = detectElement("ranking.png")
+if(ranking_button != False):
+    time.sleep(0.21)
+    print(current_time," Members icon found")
+    click(ranking_button.left+10, ranking_button.top+10)
 
-        gather_button = detectElement(GATHER)
-        if gather_button != False:
-            print(current_time," Gather Button found")
-            click(gather_button.left+25,gather_button.top+15)
-        else:
-            print(current_time," no gather button")
-        create_legions = detectElement(CREATE_LEGIONS)
-        if create_legions != False:
-            print(current_time," create legions Button found")
-            click(create_legions.left+25,create_legions.top+15)
-        else:
-            print(current_time," no create legions button")
-            full = detectElement(FULL)
-            if full != False:
-                print(current_time," The legions are full, sleeping "+str(EXPONENTIAL_BACKOFF)+" minute")
-                sleep(60*EXPONENTIAL_BACKOFF)
-                if EXPONENTIAL_BACKOFF <= 10:
-                   EXPONENTIAL_BACKOFF+=1
+    match ranking_type:
+        case "BUILDING":
+            ranking_building = detectElement("ranking_building.png")
+            if(ranking_building != False):
+                time.sleep(0.21)
+                print(current_time," Members icon found")
+                click(ranking_building.left+10, ranking_building.top+10)
             else:
-                print(current_time," The legions are not full, continuing")
-                EXPONENTIAL_BACKOFF=1
+                print("can't find "+ ranking_type)
+                exit()
+        case "HELP":
+            ranking_help = detectElement("ranking_help.png")
+            if(ranking_help != False):
+                time.sleep(0.21)
+                print(current_time," Members icon found")
+                click(ranking_help.left+10, ranking_help.top+10)
+            else:
+                print("can't find "+ ranking_type)
+                exit()
 
-        march = detectElement(MARCH)
-        if march != False:
-            print(current_time," march Button found")
-            click(march.left+25,march.top+30)
-        else:
-            print(current_time," no march button")
 
+    #Click in the middle 
+    while keyboard.is_pressed('q') == False: #the main loop (press q to pause the bot)
+        click(int(midx+100),int(midy+100))
+        print("Grabbing Window")
+        im = ImageGrab.grab(bbox=(int(np.abs(window.left+window.width*0.42)), int(np.abs(window.top+window.height*0.50)), int(np.abs(window.right)), int(np.abs(window.bottom))))  # X1,Y1,X2,Y2
+        im.save("window1.jpg")
+        result = reader.readtext('window1.jpg')
+        i = 0
+        for r in result:
+            print(r[1])
+            try:
+                file.write(r[1])
+            except: 
+                file.write("unknown_value")
+            i+=1
+            if(i >=2):
+                i=0
+                file.write("\n")
+            else:
+                file.write(",")
+        j=0
+        for j in range (0,7):
+            win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, int(midx+100), int(midy+100), -7, 0)
+        
+
+    else:
+        print(current_time," Members icon not found")
+
+    file.close()
 
 """                
     case "VILLAGE_EXPLORE":
